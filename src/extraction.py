@@ -1,8 +1,10 @@
 import scipy.io
 import numpy as np
 import sys
+import pickle
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import roc_auc_score
+from sklearn.metrics import accuracy_score
 
 def extract_features(image, n):
     patches = []
@@ -49,18 +51,23 @@ def create_training_set():
 
     print(len(feature_vectors))
     print(len(mask_vectors))
-    # print(mask_vectors)
 
-    model = RandomForestClassifier(n_estimators=10)
-    model.fit(feature_vectors, mask_vectors)
+    # model = RandomForestClassifier(n_estimators=10)
+    # model.fit(feature_vectors, mask_vectors)
+    model = pickle.load(open('finalized_model.sav', 'rb'))
 
-    test_features = feature_vectors[12]
-    test_mask = mask_vectors[12]
-    pred = model.pred(test_features)
 
-    print(roc_auc_score(y_true=test_features, y_score=pred))
+    test_features = feature_vectors[22000:26000]
+    test_mask = mask_vectors[22000:26000]
+    print(test_mask)
+    pred = model.predict(test_features)
+    filename = 'finalized_model.sav'
+    pickle.dump(model, open(filename, 'wb'))
+    
+    #print(roc_auc_score(y_true=test_mask, y_score=pred))
+    print(accuracy_score(y_true=test_mask, y_pred=pred))
 
 
 create_training_set()
-            
+
 
