@@ -45,10 +45,13 @@ data = scipy.io.loadmat('../data/data.mat')['data'][0]
 def create_training_set():
     masks = []
     t2_images = []
+    test_patient = 8
 
     for i in range(0, 62):
-        masks.append(data[i][0])
-        t2_images.append(data[i][1])
+    	if i == test_patient:
+    		continue
+    	masks.append(data[i][0])
+    	t2_images.append(data[i][1])
 
     feature_vectors = []
     mask_vectors = []
@@ -72,19 +75,21 @@ def create_training_set():
     print(len(mask_vectors))
     print(len(auc_vectors))
 
-    # model = RandomForestClassifier(n_estimators=10)
-    # model.fit(feature_vectors, mask_vectors)
-    model = pickle.load(open('finalized_model.sav', 'rb'))
+    model = RandomForestClassifier(n_estimators=10)
+    model.fit(feature_vectors, mask_vectors)
+    # model = pickle.load(open('finalized_model.sav', 'rb'))
 
-    test_features = feature_vectors[22000:26000]
-    test_mask = mask_vectors[22000:26000]
+    n = len(feature_vectors) / 62
+
+    test_features = extract_features(data[test_patient][1], 3)
+    test_mask = flatten_mask(data[test_patient][0], 3)
+    auc_test_mask = reduce_mask(test_mask)
+
     print(test_mask)
     pred = model.predict(test_features)
     filename = 'finalized_model.sav'
     pickle.dump(model, open(filename, 'wb'))
-    
 
-    auc_test_mask = auc_vectors[22000:26000]
     print(roc_auc_score(y_true=auc_test_mask, y_score=pred))
     print(accuracy_score(y_true=test_mask, y_pred=pred))
 
