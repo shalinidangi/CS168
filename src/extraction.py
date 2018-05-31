@@ -2,19 +2,22 @@ import scipy.io
 import numpy as np
 import sys
 import pickle
-from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
+from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import roc_auc_score
 from sklearn.metrics import accuracy_score
 
-def extract_features(image, n):
+def extract_features(image, mask, n):
     patches = []
 
     for i in range(n, 255-n):
         for j in range(n, 255-n):
             patch = image[i-n:i+n+1, j-n:j+n+1]
-            patches.append(patch.flatten())
+            if mask[i, j] != 0:
+                patches.append(patch.flatten())
 
+    print(patches)
     return patches
     
 
@@ -27,10 +30,10 @@ def reduce_mask(flattened_mask):
 	mask = []
 
 	for i in range(len(flattened_mask)):
-        # Reduce 0/1 -> 0 and 2 -> 1
+        # Reduce 1 -> 0 and 2 -> 1
 		if flattened_mask[i] == 2:
 			mask.append(1)
-		else:
+		elif flattened_mask[i] == 1:
 			mask.append(0)
 
 	return mask
@@ -41,7 +44,6 @@ data = scipy.io.loadmat('../data/data.mat')['data'][0]
 def create_training_set(test_patient):
     masks = []
     t2_images = []
-    test_patient = 8
 
     for i in range(0, 62):
         # Gather masks and images for all patients (excluding test patient)
@@ -56,7 +58,7 @@ def create_training_set(test_patient):
 
     for i in range(len(masks)):
         # Extract features for all patients
-        patient = extract_features(t2_images[i], 3)
+        patient = extract_features(t2_images[i], masks[i], 3)
         for j in range(len(patient)):
             feature_vectors.append(patient[j])
 
@@ -65,6 +67,10 @@ def create_training_set(test_patient):
         auc_mask = reduce_mask(accuracy_mask)
         # mask_vectors += accuracy_mask
         auc_vectors += auc_mask
+        print(auc_mask)
+
+    print(len(feature_vectors))
+    print(len(auc_vectors))
 
     return feature_vectors, auc_vectors
 
@@ -82,9 +88,10 @@ def build_model(feature_vectors, auc_vectors, classifier, filename, train=False)
 
 def test_model(test_patient, model):
     # Determine features and masks for test patient
-    test_features = extract_features(data[test_patient][1], 3)
     test_mask = flatten_mask(data[test_patient][0], 3)
+    test_features = extract_features(data[test_patient][1], test_mask, 3)
     auc_test_mask = reduce_mask(test_mask)
+    # print(auc_test_mask)
 
     pred = model.predict(test_features)
     
@@ -95,9 +102,13 @@ def test_model(test_patient, model):
 def run_model(test_patient):
     classifier1 = RandomForestClassifier(n_estimators=10)
     classifier2 = AdaBoostClassifier()
+    classifier3 = GradientBoostingClassifier()
+
 
     feature_vectors, auc_vectors = create_training_set(test_patient)
-    model = build_model(feature_vectors, auc_vectors, classifier2, "forest.sav", True)
+    # print(feature_vectors)
+    # print(auc_vectors)
+    model = build_model(feature_vectors, auc_vectors, classifier1, "forest.sav", True)
     test_model(test_patient, model)
 
 
