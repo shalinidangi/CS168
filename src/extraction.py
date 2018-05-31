@@ -46,7 +46,7 @@ def create_training_set():
     masks = []
     t2_images = []
 
-    for i in range(0, 61):
+    for i in range(0, 62):
         masks.append(data[i][0])
         t2_images.append(data[i][1])
 
