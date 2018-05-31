@@ -2,7 +2,8 @@ import scipy.io
 import numpy as np
 import sys
 import pickle
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import roc_auc_score
 from sklearn.metrics import accuracy_score
 
@@ -37,7 +38,7 @@ def reduce_mask(flattened_mask):
 
 data = scipy.io.loadmat('../data/data.mat')['data'][0]
 
-def create_training_set():
+def create_training_set(test_patient):
     masks = []
     t2_images = []
     test_patient = 8
@@ -50,7 +51,7 @@ def create_training_set():
     	t2_images.append(data[i][1])
 
     feature_vectors = []
-    mask_vectors = []
+    # mask_vectors = []
     auc_vectors = []
 
     for i in range(len(masks)):
@@ -62,31 +63,44 @@ def create_training_set():
         # Flatten and reduce masks for use in accuracy and AUC testing
         accuracy_mask = flatten_mask(masks[i], 3).tolist()
         auc_mask = reduce_mask(accuracy_mask)
-        mask_vectors += accuracy_mask
+        # mask_vectors += accuracy_mask
         auc_vectors += auc_mask
 
-    # Train model
-    model = RandomForestClassifier(n_estimators=10)
-    model.fit(feature_vectors, mask_vectors)
+    return feature_vectors, auc_vectors
 
-    # Test model
-    # model = pickle.load(open('finalized_model.sav', 'rb'))
 
-    print(len(feature_vectors))
+def build_model(feature_vectors, auc_vectors, classifier, filename, train=False):
+    if train:
+        model = classifier
+        model.fit(feature_vectors, auc_vectors)
+        pickle.dump(model, open(filename, 'wb'))
+    else:
+        model = pickle.load(open(filename, 'rb'))
 
+    return model
+
+
+def test_model(test_patient, model):
     # Determine features and masks for test patient
     test_features = extract_features(data[test_patient][1], 3)
     test_mask = flatten_mask(data[test_patient][0], 3)
     auc_test_mask = reduce_mask(test_mask)
 
     pred = model.predict(test_features)
-    filename = 'finalized_model.sav'
-    pickle.dump(model, open(filename, 'wb'))
-
+    
     print(roc_auc_score(y_true=auc_test_mask, y_score=pred))
-    print(accuracy_score(y_true=test_mask, y_pred=pred))
+    # print(accuracy_score(y_true=test_mask, y_pred=pred))
 
 
-create_training_set()
+def run_model(test_patient):
+    classifier1 = RandomForestClassifier(n_estimators=10)
+    classifier2 = AdaBoostClassifier()
+
+    feature_vectors, auc_vectors = create_training_set(test_patient)
+    model = build_model(feature_vectors, auc_vectors, classifier2, "forest.sav", True)
+    test_model(test_patient, model)
+
+
+run_model(8)
 
 
