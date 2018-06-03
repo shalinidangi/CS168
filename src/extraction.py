@@ -13,11 +13,11 @@ def extract_features(image, mask, n):
 
     for i in range(n, 255-n):
         for j in range(n, 255-n):
-            patch = image[i-n:i+n+1, j-n:j+n+1]
-            if mask[i, j] != 0:
+            if mask[i, j].astype(int) != 0:
+                patch = image[i-n:i+n+1, j-n:j+n+1]
                 patches.append(patch.flatten())
 
-    print(patches)
+    # print(patches)
     return patches
     
 
@@ -67,10 +67,12 @@ def create_training_set(test_patient):
         auc_mask = reduce_mask(accuracy_mask)
         # mask_vectors += accuracy_mask
         auc_vectors += auc_mask
-        print(auc_mask)
+        # print(auc_mask)
 
     print(len(feature_vectors))
     print(len(auc_vectors))
+    print(auc_vectors.count(1))
+    print(auc_vectors.count(0))
 
     return feature_vectors, auc_vectors
 
@@ -88,9 +90,9 @@ def build_model(feature_vectors, auc_vectors, classifier, filename, train=False)
 
 def test_model(test_patient, model):
     # Determine features and masks for test patient
-    test_mask = flatten_mask(data[test_patient][0], 3)
+    test_mask = data[test_patient][0]
     test_features = extract_features(data[test_patient][1], test_mask, 3)
-    auc_test_mask = reduce_mask(test_mask)
+    auc_test_mask = reduce_mask(flatten_mask(test_mask,3))
     # print(auc_test_mask)
 
     pred = model.predict(test_features)
