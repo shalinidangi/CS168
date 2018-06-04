@@ -7,6 +7,10 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import roc_auc_score
 from sklearn.metrics import accuracy_score
+from sklearn.metrics import roc_curve
+from sklearn.metrics import auc
+import matplotlib.pyplot as plt
+
 
 def extract_features(image, mask, n):
     patches = []
@@ -14,7 +18,8 @@ def extract_features(image, mask, n):
 
     for i in range(n, 255-n):
         for j in range(n, 255-n):
-            if 0 not in mask[i-n:i+n+1, j-n:j+n+1].astype(int):
+            if int(mask[i, j]) != 0:
+            # if 0 not in mask[i-n:i+n+1, j-n:j+n+1].astype(int):
                 patch = image[i-n:i+n+1, j-n:j+n+1]
                 patches.append(patch.flatten())   
                 trimmed_mask.append(int(mask[i,j]))             
@@ -29,16 +34,16 @@ def flatten_mask(mask, n):
 
 def reduce_mask(flattened_mask):
     # Mark all cancerous pixels as 1 and all others as 0
-	mask = []
+    mask = []
 
-	for i in range(len(flattened_mask)):
+    for i in range(len(flattened_mask)):
         # Reduce 1 -> 0 and 2 -> 1
-		if flattened_mask[i] == 2:
-			mask.append(1)
-		elif flattened_mask[i] == 1:
-			mask.append(0)
+        if flattened_mask[i] == 2:
+            mask.append(1)
+        elif flattened_mask[i] == 1:
+            mask.append(0)
 
-	return mask
+    return mask
 
 
 data = scipy.io.loadmat('../data/data.mat')['data'][0]
@@ -49,10 +54,10 @@ def create_training_set(test_patient):
 
     for i in range(0, 62):
         # Gather masks and images for all patients (excluding test patient)
-    	if i == test_patient or i == 27:
-    		continue
-    	masks.append(data[i][0])
-    	t2_images.append(data[i][1])
+        if i == test_patient or i == 27:
+            continue
+        masks.append(data[i][0])
+        t2_images.append(data[i][1])
 
     feature_vectors = []
     # mask_vectors = []
@@ -93,11 +98,20 @@ def test_model(test_patient, model):
     # Determine features and masks for test patient
     test_mask = data[test_patient][0]
     test_features, trimmed_test_mask = extract_features(data[test_patient][1], test_mask, 6)
+    pred = model.predict_proba(test_features)
+    print(pred)
 
-    pred = model.predict(test_features)
-    
-    print(trimmed_test_mask)
-    print(roc_auc_score(y_true=reduce_mask(trimmed_test_mask), y_score=pred))
+    false_positive_rate, true_positive_rate, thresholds = roc_curve(reduce_mask(trimmed_test_mask), pred[:, 1])
+    roc_auc= auc(false_positive_rate, true_positive_rate)
+    print(roc_auc)
+    plt.title('Receiver Operating Characteristic')
+    plt.plot(false_positive_rate, true_positive_rate, 'b',label='AUC = %0.2f'% roc_auc)
+    plt.legend(loc='lower right')
+    plt.ylabel('True Positive Rate')
+    plt.xlabel('False Positive Rate')
+
+    # print(trimmed_test_mask)
+    # print(roc_auc_score(y_true=reduce_mask(trimmed_test_mask), y_score=pred))
     # print(accuracy_score(y_true=test_mask, y_pred=pred))
 
 
