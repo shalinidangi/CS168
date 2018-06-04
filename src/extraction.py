@@ -9,7 +9,7 @@ from sklearn.metrics import roc_auc_score
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import roc_curve
 from sklearn.metrics import auc
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 
 def extract_features(image, mask, n):
@@ -48,7 +48,7 @@ def reduce_mask(flattened_mask):
 
 data = scipy.io.loadmat('../data/data.mat')['data'][0]
 
-def create_training_set(test_patient):
+def create_training_set(test_patient, n):
     masks = []
     t2_images = []
 
@@ -65,7 +65,7 @@ def create_training_set(test_patient):
 
     for i in range(len(masks)):
         # Extract features for all patients
-        patient, trimmed_mask = extract_features(t2_images[i], masks[i], 6)
+        patient, trimmed_mask = extract_features(t2_images[i], masks[i], n)
         for j in range(len(patient)):
             feature_vectors.append(patient[j])
 
@@ -94,40 +94,40 @@ def build_model(feature_vectors, auc_vectors, classifier, filename, train=False)
     return model
 
 
-def test_model(test_patient, model):
+def test_model(test_patient, model, n):
     # Determine features and masks for test patient
     test_mask = data[test_patient][0]
-    test_features, trimmed_test_mask = extract_features(data[test_patient][1], test_mask, 6)
+    test_features, trimmed_test_mask = extract_features(data[test_patient][1], test_mask, n)
     pred = model.predict_proba(test_features)
     print(pred)
 
     false_positive_rate, true_positive_rate, thresholds = roc_curve(reduce_mask(trimmed_test_mask), pred[:, 1])
     roc_auc= auc(false_positive_rate, true_positive_rate)
     print(roc_auc)
-    plt.title('Receiver Operating Characteristic')
-    plt.plot(false_positive_rate, true_positive_rate, 'b',label='AUC = %0.2f'% roc_auc)
-    plt.legend(loc='lower right')
-    plt.ylabel('True Positive Rate')
-    plt.xlabel('False Positive Rate')
+    # plt.title('Receiver Operating Characteristic')
+    # plt.plot(false_positive_rate, true_positive_rate, 'b',label='AUC = %0.2f'% roc_auc)
+    # plt.legend(loc='lower right')
+    # plt.ylabel('True Positive Rate')
+    # plt.xlabel('False Positive Rate')
 
     # print(trimmed_test_mask)
     # print(roc_auc_score(y_true=reduce_mask(trimmed_test_mask), y_score=pred))
     # print(accuracy_score(y_true=test_mask, y_pred=pred))
 
 
-def run_model(test_patient):
+def run_model(test_patient, n):
     classifier1 = RandomForestClassifier(n_estimators=10)
     classifier2 = AdaBoostClassifier()
     classifier3 = GradientBoostingClassifier()
 
 
-    feature_vectors, auc_vectors = create_training_set(test_patient)
+    feature_vectors, auc_vectors = create_training_set(test_patient, n)
     # print(feature_vectors)
     # print(auc_vectors)
     model = build_model(feature_vectors, auc_vectors, classifier3, "gbc.sav", True)
-    test_model(test_patient, model)
+    test_model(test_patient, model, n)
 
 
-run_model(18)
+run_model(18, 6)
 
 
