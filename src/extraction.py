@@ -122,8 +122,8 @@ def run_model(classifier, train_set, test_set, n):
     feature_vectors, auc_vectors = create_training_set(train_set, n)
     # print(feature_vectors)
     # print(auc_vectors)
-    model1 = build_model(feature_vectors, auc_vectors, classifier, "forest.sav", True)
-    return test_model(test_set, model1, n)
+    model = build_model(feature_vectors, auc_vectors, classifier, "forest.sav", True)
+    return test_model(test_set, model, n)
 
 
 if __name__ == "__main__":
@@ -139,65 +139,92 @@ if __name__ == "__main__":
     patients.remove(27)
 
     kf = KFold(n_splits=10)
+    output = open('output.txt','w') 
 
     for n in range (3,7):
+        output.write("\\\\\\\\\\\\\\\\\\\\\\\\\\       " + str(n) + "      \\\\\\\\\\\\\\\\\\\\\\\\\\\ \n")
+
         # Random Forest Classifier
         auc_scores = []
-        for train_set, test_set in kf.split(patients):
-            auc_scores.append(run_model(forest, train_set, test_set, n))
+        adjusted_scores = []
 
-        print("Random Forest: ")
-        print(sum(auc_scores) / float(len(auc_scores)))
+        for train_set, test_set in kf.split(patients):
+            score = run_model(forest, train_set, test_set, n)
+            output.write(str(score) + "\n")
+            auc_scores.append(score)
+            if score < 0.5:
+                adjusted_scores.append(1 - score)
+            else:
+                adjusted_scores.append(score)
+
+        output.write("Random Forest: \n")
+        output.write("AUROC: " + str(sum(auc_scores) / float(len(auc_scores))) + "\n")
+        output.write("Adj. AUROC: " + str(sum(adjusted_scores) / float(len(auc_scores))) + "\n")
 
         # AdaBoost Classifier
         auc_scores = []
         for train_set, test_set in kf.split(patients):
-            auc_scores.append(run_model(ada, train_set, test_set, n))
+            score = run_model(forest, train_set, test_set, n)
+            output.write(str(score)  + "\n")
+            auc_scores.append(score)
 
-        print("AdaBoost: ")
-        print(sum(auc_scores) / float(len(auc_scores)))
+        output.write("AdaBoost: \n")
+        output.write("AUROC: " + str(sum(auc_scores) / float(len(auc_scores))) + "\n")
+        output.write("Adj. AUROC: " + str(sum(adjusted_scores) / float(len(auc_scores))) + "\n")
 
         # Gradient Boosting Classfier
         auc_scores = []
         for train_set, test_set in kf.split(patients):
-            auc_scores.append(run_model(gbc, train_set, test_set, n))
+            score = run_model(forest, train_set, test_set, n)
+            output.write(str(score)  + "\n")
+            auc_scores.append(score)
 
-        print("Gradient Boosting: ")
-        print(sum(auc_scores) / float(len(auc_scores)))
+        output.write("Gradient Boosting: \n")
+        output.write("AUROC: " + str(sum(auc_scores) / float(len(auc_scores))) + "\n")
+        output.write("Adj. AUROC: " + str(sum(adjusted_scores) / float(len(auc_scores))) + "\n")
 
         # K-Nearest Neighbors Classifier
         auc_scores = []
         for train_set, test_set in kf.split(patients):
-            auc_scores.append(run_model(k_neighbors, train_set, test_set, n))
+            score = run_model(forest, train_set, test_set, n)
+            output.write(str(score) + "\n")
+            auc_scores.append(score)
 
-        print("K-Nearest Neighbors: ")
-        print(sum(auc_scores) / float(len(auc_scores)))
+        output.write("K-Nearest Neighbors: \n")
+        output.write("AUROC: " + str(sum(auc_scores) / float(len(auc_scores))) + "\n")
+        output.write("Adj. AUROC: " + str(sum(adjusted_scores) / float(len(auc_scores))) + "\n")
 
         # Decision Tree Classifier
         auc_scores = []
         for train_set, test_set in kf.split(patients):
-            auc_scores.append(run_model(k_neighbors, train_set, test_set, n))
+            score = run_model(forest, train_set, test_set, n)
+            output.write(str(score) + "\n")
+            auc_scores.append(score)
 
-        print("Decision Tree: ")
-        print(sum(auc_scores) / float(len(auc_scores)))
+        output.write("Decision Tree: \n")
+        output.write("AUROC: " + str(sum(auc_scores) / float(len(auc_scores))) + "\n")
+        output.write("Adj. AUROC: " + str(sum(adjusted_scores) / float(len(auc_scores))) + "\n")
 
         # Multi-layer Perceptron Classifier (Neural Network)
         auc_scores = []
         for train_set, test_set in kf.split(patients):
-            auc_scores.append(run_model(neural_network, train_set, test_set, n))
+            score = run_model(forest, train_set, test_set, n)
+            output.write(str(score) + "\n")
+            auc_scores.append(score)
 
-        print("Multi-layer Perceptron: ")
-        print(sum(auc_scores) / float(len(auc_scores)))
+        output.write("Multi-layer Perceptron: \n")
+        output.write("AUROC: " + str(sum(auc_scores) / float(len(auc_scores))) + "\n")
+        output.write("Adj. AUROC: " + str(sum(adjusted_scores) / float(len(auc_scores))) + "\n")
 
         # C-Support Vector Classification
         auc_scores = []
         for train_set, test_set in kf.split(patients):
-            auc_scores.append(run_model(svc, train_set, test_set, n))
+            score = run_model(forest, train_set, test_set, n)
+            output.write(str(score) + "\n")
+            auc_scores.append(score)
 
-        print("C-Support Vector: ")
-        print(sum(auc_scores) / float(len(auc_scores)))
-
-
-
+        output.write("C-Support Vector: \n")
+        output.write("AUROC: " + str(sum(auc_scores) / float(len(auc_scores))) + "\n")
+        output.write("Adj. AUROC" + str(sum(adjusted_scores) / float(len(auc_scores))) + "\n")
 
 
