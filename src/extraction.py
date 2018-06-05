@@ -2,6 +2,7 @@ import scipy.io
 import numpy as np
 import sys
 import pickle
+import operator
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.tree import DecisionTreeClassifier
@@ -13,7 +14,7 @@ from sklearn.metrics import roc_curve
 from sklearn.metrics import precision_recall_curve
 from sklearn.metrics import auc
 from sklearn.model_selection import KFold
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 # np.set_printoptions(threshold='nan')
 
@@ -23,17 +24,14 @@ def extract_features(image, mask, n):
 
     for i in range(n, 255-n):
         for j in range(n, 255-n):
-            if np.count_nonzero(mask[i-n:i+n+1, j-n:j+n+1].astype(int)) > 0:
+            # if np.count_nonzero(mask[i-n:i+n+1, j-n:j+n+1].astype(int)) > 0:
+            # if 0 not in mask[i-n:i+n+1, j-n:j+n+1].astype(int):
+            if int(round(mask[i,j])) != 0:
                 patch = image[i-n:i+n+1, j-n:j+n+1]
                 patches.append(patch.flatten())   
-                trimmed_mask.append(int(mask[i,j]))             
+                trimmed_mask.append(int(round(mask[i,j])))             
 
     return patches, trimmed_mask
-    
-
-def flatten_mask(mask, n):
-    return mask[n:255-n, n:255-n].astype(int).flatten()
-
 
 data = scipy.io.loadmat('../data/data.mat')['data'][0]
 
@@ -46,6 +44,13 @@ def create_training_set(train_set, n):
         masks.append(data[patient_index][0])
         t2_images.append(data[patient_index][1])
 
+    # i = 0
+    # for mask in masks:
+    #     unique, counts = np.unique(np.around(mask, decimals=1).astype(int), return_counts=True)
+    #     print i
+    #     print dict(zip(unique, counts))
+    #     i += 1
+
     feature_vectors = []
     auc_vectors = []
 
@@ -56,7 +61,6 @@ def create_training_set(train_set, n):
             feature_vectors.append(patient[j])
 
         # Flatten and reduce masks for use in accuracy and AUC testing
-        accuracy_mask = flatten_mask(masks[i], 3).tolist()
         auc_vectors += trimmed_mask
 
     # print(len(feature_vectors))
@@ -64,9 +68,9 @@ def create_training_set(train_set, n):
     print(auc_vectors.count(2))
     print(auc_vectors.count(1))
     print(auc_vectors.count(0))
-    print(auc_vectors.count(2)/float(auc_vectors.count(0)+ auc_vectors.count(1) + auc_vectors.count(2)))
+    print(auc_vectors.count(2)/float(len(auc_vectors)))
 
-    return feature_vectors, auc_vectors, auc_vectors.count(1)/float(auc_vectors.count(0)+ auc_vectors.count(1))
+    return feature_vectors, auc_vectors, auc_vectors.count(2)/float(len(auc_vectors))
 
 
 def build_model(feature_vectors, auc_vectors, classifier, filename, train=False):
@@ -91,15 +95,14 @@ def test_model(test_set, model, n):
         test_masks += test_mask
 
     pred = model.predict_proba(test_features)
-    print(pred)
 
-    my_theta_times_X = 0.3  # Our custom threshold
-    predict_theta = pred[:, 1] > my_theta_times_X
-    
     false_positive_rate, true_positive_rate, thresholds = roc_curve(test_masks, pred[:, 1], pos_label=2)
-    # false_positive_rate, true_positive_rate, thresholds = roc_curve(reduced_test_masks, predict_theta)
     roc_auc = auc(false_positive_rate, true_positive_rate)
     print(roc_auc)
+
+    optimal_idx = np.argmax(true_positive_rate - false_positive_rate)
+    optimal_threshold = thresholds[optimal_idx]
+    print(optimal_threshold)
 
     precision, recall, thresholds = precision_recall_curve(test_masks, pred[:,1], pos_label=2)
     pr_auc = auc(recall, precision)
@@ -113,6 +116,7 @@ def test_model(test_set, model, n):
     # plt.legend(loc='lower right')
     # plt.ylabel('True Positive Rate')
     # plt.xlabel('False Positive Rate')
+    # plt.show()
 
     return roc_auc, pr_auc
 
@@ -128,37 +132,72 @@ def run_model(classifier, train_set, test_set, n):
 
 
 if __name__ == "__main__":
-    forest = RandomForestClassifier(n_estimators=10)
+    forest = RandomForestClassifier(n_estimators=10, class_weight="balanced")
     ada = AdaBoostClassifier()
     gbc = GradientBoostingClassifier()
     k_neighbors = KNeighborsClassifier(3)
-    tree = DecisionTreeClassifier()
+    tree = DecisionTreeClassifier(class_weight="balanced")
     neural_network = MLPClassifier(alpha=1)
     svc = SVC()
-    classifiers = [forest, ada, gbc, k_neighbors, tree, neural_network, svc]
-    names = ['forest', 'ada', 'gbc', 'k_neighbors', 'tree', 'neural_network', 'svc']
+    classifiers = [forest, ada, gbc, k_neighbors, tree, neural_network]
+    names = ['forest', 'ada', 'gbc', 'k_neighbors', 'tree', 'neural_network']
 
     patients = list(range(0,62))
-    patients.remove(27)
+    # patients.remove(27)
 
     kf = KFold(n_splits=10)
     output = open('output2.txt','w') 
 
-    for n in range (2,7):
+    # test_set = [18]
+    # train_set = patients
+    # # train_set.remove(18)
+    # print(train_set)
+
+    # output = open('output3.txt','w') 
+    # for n in range(2,8):
+    #     for i in range(len(classifiers)-1):
+    #         roc_aucs = []
+    #         pr_aucs = []
+    #         adjusted_scores = []
+    #         roc_auc, pr_auc, baseline = run_model(classifiers[i], train_set, test_set, n)
+
+    #         output.write("roc_auc: " + str(roc_auc) + "\n")
+    #         output.write("pr_auc: " + str(pr_auc) + "\n")
+
+    #         roc_aucs.append(roc_auc)
+    #         pr_aucs.append(pr_auc)
+
+    #         if roc_auc < 0.5:
+    #             adjusted_scores.append(1 - roc_auc)
+    #         else:
+    #             adjusted_scores.append(roc_auc)
+
+    #         output.write(names[i] + "\n")
+    #         output.write("AUROC: " + str(sum(roc_aucs) / float(len(roc_aucs))) + "\n")
+    #         output.write("Adj. AUROC: " + str(sum(adjusted_scores) / float(len(adjusted_scores))) + "\n")
+    #         output.write("AUPRC: " + str(sum(pr_aucs) / float(len(pr_aucs))) + "\n")
+    #         output.write("Ratio of Positive/Total: " + str(baseline) + "\n")
+    #         output.write("Difference in Average Precision: " + str(sum(pr_aucs) / float(len(pr_aucs)) - baseline) + "\n")
+
+    for n in range (3,8):
         output.write("\\\\\\\\\\\\\\\\\\\\\\\\\\       " + str(n) + "      \\\\\\\\\\\\\\\\\\\\\\\\\\ \n")
 
         for i in range(len(classifiers)):
-            output.write(names[i] + "\n")
+            output.write("\n" + names[i] + "\n")
             roc_aucs = []
             pr_aucs = []
             adjusted_scores = []
+            baselines = [] 
+            # print(patients)
 
             for train_set, test_set in kf.split(patients):
+                # print (train_set)
                 roc_auc, pr_auc, baseline = run_model(classifiers[i], train_set, test_set, n)
 
-                output.write("roc_auc: " + str(roc_auc) + "\n")
+                output.write("\nroc_auc: " + str(roc_auc) + "\n")
                 output.write("pr_auc: " + str(pr_auc) + "\n")
 
+                baselines.append(baseline)
                 roc_aucs.append(roc_auc)
                 pr_aucs.append(pr_auc)
 
@@ -167,10 +206,10 @@ if __name__ == "__main__":
                 else:
                     adjusted_scores.append(roc_auc)
 
-            output.write(names[i] + "\n")
-            output.write("AUROC: " + str(sum(roc_aucs) / float(len(roc_aucs))) + "\n")
+            diff = map(operator.sub, pr_aucs, baselines)
+            output.write("\nAUROC: " + str(sum(roc_aucs) / float(len(roc_aucs))) + "\n")
             output.write("Adj. AUROC: " + str(sum(adjusted_scores) / float(len(adjusted_scores))) + "\n")
             output.write("AUPRC: " + str(sum(pr_aucs) / float(len(pr_aucs))) + "\n")
-            output.write("Ratio of Positive/Total: " + str(baseline) + "\n")
-            output.write("Difference in Average Precision: " + str(sum(pr_aucs) / float(len(pr_aucs)) - baseline) + "\n")
+            output.write("Ratio of Positive/Total: " + str(sum(baselines) / float(len(baselines))) + "\n")
+            output.write("Difference in Average Precision: " + str(sum(diff) / float(len(diff))) + "\n")
 
