@@ -81,7 +81,7 @@ def create_training_set(train_set, n):
     print(auc_vectors.count(0))
     print(auc_vectors.count(1)/float(auc_vectors.count(0)+ auc_vectors.count(1)))
 
-    return feature_vectors, auc_vectors
+    return feature_vectors, auc_vectors, auc_vectors.count(1)/float(auc_vectors.count(0)+ auc_vectors.count(1))
 
 
 def build_model(feature_vectors, auc_vectors, classifier, filename, train=False):
@@ -131,11 +131,12 @@ def test_model(test_set, model, n):
 
 
 def run_model(classifier, train_set, test_set, n):
-    feature_vectors, auc_vectors = create_training_set(train_set, n)
+    feature_vectors, auc_vectors, baseline = create_training_set(train_set, n)
     # print(feature_vectors)
     # print(auc_vectors)
     model = build_model(feature_vectors, auc_vectors, classifier, "forest.sav", True)
-    return test_model(test_set, model, n)
+    roc_auc, pr_auc = test_model(test_set, model, n)
+    return roc_auc, pr_auc, baseline
 
 
 
@@ -147,7 +148,8 @@ if __name__ == "__main__":
     tree = DecisionTreeClassifier()
     neural_network = MLPClassifier(alpha=1)
     svc = SVC()
-    classifiers = {'forest': forest, 'ada': ada, 'gbc': gbc, 'k_neighbors': k_neighbors, 'tree': tree, 'neural_network': neural_network, 'svc': svc}
+    classifiers = [forest, ada, gbc, k_neighbors, tree, neural_network, svc]
+    names = ['forest', 'ada', 'gbc', 'k_neighbors', 'tree', 'neural_network', 'svc']
 
     patients = list(range(0,62))
     patients.remove(27)
@@ -158,16 +160,17 @@ if __name__ == "__main__":
     for n in range (2,7):
         output.write("\\\\\\\\\\\\\\\\\\\\\\\\\\       " + str(n) + "      \\\\\\\\\\\\\\\\\\\\\\\\\\ \n")
 
-        for name, classifier in classifiers.items():
+        for i in range(len(classifiers)):
+            output.write(names[i] + "\n")
             roc_aucs = []
             pr_aucs = []
             adjusted_scores = []
 
             for train_set, test_set in kf.split(patients):
-                roc_auc, pr_auc = run_model(classifier, train_set, test_set, n)
+                roc_auc, pr_auc, baseline = run_model(classifiers[i], train_set, test_set, n)
 
-                output.write("roc_auc" + str(roc_auc) + "\n")
-                output.write("pr_auc" + str(pr_auc) + "\n")
+                output.write("roc_auc: " + str(roc_auc) + "\n")
+                output.write("pr_auc: " + str(pr_auc) + "\n")
 
                 roc_aucs.append(roc_auc)
                 pr_aucs.append(pr_auc)
@@ -177,8 +180,10 @@ if __name__ == "__main__":
                 else:
                     adjusted_scores.append(roc_auc)
 
-            output.write(name + "\n")
+            output.write(names[i] + "\n")
             output.write("AUROC: " + str(sum(roc_aucs) / float(len(roc_aucs))) + "\n")
-            output.write("AUPRC: " + str(sum(pr_aucs) / float(len(pr_aucs))) + "\n")
             output.write("Adj. AUROC: " + str(sum(adjusted_scores) / float(len(adjusted_scores))) + "\n")
+            output.write("AUPRC: " + str(sum(pr_aucs) / float(len(pr_aucs))) + "\n")
+            output.write("Ratio of Positive/Total: " + str(baseline) + "\n")
+            output.write("Difference in Average Precision: " + str(sum(pr_aucs) / float(len(pr_aucs)) - baseline) + "\n")
 
