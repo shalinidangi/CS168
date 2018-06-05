@@ -23,32 +23,16 @@ def extract_features(image, mask, n):
 
     for i in range(n, 255-n):
         for j in range(n, 255-n):
-            if int(mask[i, j]) != 0:
-            # if 0 not in mask[i-n:i+n+1, j-n:j+n+1].astype(int):
+            if np.count_nonzero(mask[i-n:i+n+1, j-n:j+n+1].astype(int)) > 0:
                 patch = image[i-n:i+n+1, j-n:j+n+1]
                 patches.append(patch.flatten())   
                 trimmed_mask.append(int(mask[i,j]))             
 
-    # print(patches)
     return patches, trimmed_mask
     
 
 def flatten_mask(mask, n):
     return mask[n:255-n, n:255-n].astype(int).flatten()
-
-
-def reduce_mask(flattened_mask):
-    # Mark all cancerous pixels as 1 and all others as 0
-    mask = []
-
-    for i in range(len(flattened_mask)):
-        # Reduce 1 -> 0 and 2 -> 1
-        if flattened_mask[i] == 2:
-            mask.append(1)
-        elif flattened_mask[i] == 1:
-            mask.append(0)
-
-    return mask
 
 
 data = scipy.io.loadmat('../data/data.mat')['data'][0]
@@ -77,9 +61,10 @@ def create_training_set(train_set, n):
 
     # print(len(feature_vectors))
     # print(len(auc_vectors))
+    print(auc_vectors.count(2))
     print(auc_vectors.count(1))
     print(auc_vectors.count(0))
-    print(auc_vectors.count(1)/float(auc_vectors.count(0)+ auc_vectors.count(1)))
+    print(auc_vectors.count(2)/float(auc_vectors.count(0)+ auc_vectors.count(1) + auc_vectors.count(2)))
 
     return feature_vectors, auc_vectors, auc_vectors.count(1)/float(auc_vectors.count(0)+ auc_vectors.count(1))
 
@@ -111,7 +96,6 @@ def test_model(test_set, model, n):
     my_theta_times_X = 0.3  # Our custom threshold
     predict_theta = pred[:, 1] > my_theta_times_X
     
-    # reduced_test_masks = reduce_mask(test_masks)
     false_positive_rate, true_positive_rate, thresholds = roc_curve(test_masks, pred[:, 1], pos_label=2)
     # false_positive_rate, true_positive_rate, thresholds = roc_curve(reduced_test_masks, predict_theta)
     roc_auc = auc(false_positive_rate, true_positive_rate)
