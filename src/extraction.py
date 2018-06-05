@@ -121,6 +121,9 @@ def test_model(test_set, model, n):
     pr_auc = auc(recall, precision)
     print(pr_auc)
 
+    pred = model.predict(test_features)
+    print(accuracy_score(y_true=test_masks, y_pred=pred))
+
     # plt.title('Receiver Operating Characteristic')
     # plt.plot(false_positive_rate, true_positive_rate, 'b',label='AUC = %0.2f'% roc_auc)
     # plt.legend(loc='lower right')
