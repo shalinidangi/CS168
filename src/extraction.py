@@ -73,7 +73,7 @@ def create_training_set(train_set, n):
 
         # Flatten and reduce masks for use in accuracy and AUC testing
         accuracy_mask = flatten_mask(masks[i], 3).tolist()
-        auc_vectors += reduce_mask(trimmed_mask)
+        auc_vectors += trimmed_mask
 
     # print(len(feature_vectors))
     # print(len(auc_vectors))
@@ -88,7 +88,7 @@ def build_model(feature_vectors, auc_vectors, classifier, filename, train=False)
     if train:
         model = classifier
         model.fit(feature_vectors, auc_vectors)
-        pickle.dump(model, open(filename, 'wb'))
+        # pickle.dump(model, open(filename, 'wb'))
     else:
         model = pickle.load(open(filename, 'rb'))
 
@@ -111,13 +111,13 @@ def test_model(test_set, model, n):
     my_theta_times_X = 0.3  # Our custom threshold
     predict_theta = pred[:, 1] > my_theta_times_X
     
-    reduced_test_masks = reduce_mask(test_masks)
-    # false_positive_rate, true_positive_rate, thresholds = roc_curve(reduced_test_masks, pred[:, 1])
-    false_positive_rate, true_positive_rate, thresholds = roc_curve(reduced_test_masks, predict_theta)
+    # reduced_test_masks = reduce_mask(test_masks)
+    false_positive_rate, true_positive_rate, thresholds = roc_curve(test_masks, pred[:, 1], pos_label=2)
+    # false_positive_rate, true_positive_rate, thresholds = roc_curve(reduced_test_masks, predict_theta)
     roc_auc = auc(false_positive_rate, true_positive_rate)
     print(roc_auc)
 
-    precision, recall, thresholds = precision_recall_curve(reduced_test_masks, pred[:,1], pos_label=1)
+    precision, recall, thresholds = precision_recall_curve(test_masks, pred[:,1], pos_label=2)
     pr_auc = auc(recall, precision)
     print(pr_auc)
 
