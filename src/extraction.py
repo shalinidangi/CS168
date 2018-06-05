@@ -10,10 +10,12 @@ from sklearn.svm import SVC
 from sklearn.metrics import roc_auc_score
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import roc_curve
+from sklearn.metrics import precision_recall_curve
 from sklearn.metrics import auc
 from sklearn.model_selection import KFold
 # import matplotlib.pyplot as plt
 
+# np.set_printoptions(threshold='nan')
 
 def extract_features(image, mask, n):
     patches = []
@@ -73,10 +75,11 @@ def create_training_set(train_set, n):
         accuracy_mask = flatten_mask(masks[i], 3).tolist()
         auc_vectors += reduce_mask(trimmed_mask)
 
-    print(len(feature_vectors))
-    print(len(auc_vectors))
+    # print(len(feature_vectors))
+    # print(len(auc_vectors))
     print(auc_vectors.count(1))
     print(auc_vectors.count(0))
+    print(auc_vectors.count(1)/float(auc_vectors.count(0)+ auc_vectors.count(1)))
 
     return feature_vectors, auc_vectors
 
@@ -103,11 +106,20 @@ def test_model(test_set, model, n):
         test_masks += test_mask
 
     pred = model.predict_proba(test_features)
+    print(pred)
 
+    my_theta_times_X = 0.3  # Our custom threshold
+    predict_theta = pred[:, 1] > my_theta_times_X
+    
     reduced_test_masks = reduce_mask(test_masks)
-    false_positive_rate, true_positive_rate, thresholds = roc_curve(reduced_test_masks, pred[:, 1])
+    # false_positive_rate, true_positive_rate, thresholds = roc_curve(reduced_test_masks, pred[:, 1])
+    false_positive_rate, true_positive_rate, thresholds = roc_curve(reduced_test_masks, predict_theta)
     roc_auc = auc(false_positive_rate, true_positive_rate)
     print(roc_auc)
+
+    precision, recall, thresholds = precision_recall_curve(reduced_test_masks, pred[:,1], pos_label=1)
+    pr_auc = auc(recall, precision)
+    print(pr_auc)
 
     # plt.title('Receiver Operating Characteristic')
     # plt.plot(false_positive_rate, true_positive_rate, 'b',label='AUC = %0.2f'% roc_auc)
@@ -115,7 +127,7 @@ def test_model(test_set, model, n):
     # plt.ylabel('True Positive Rate')
     # plt.xlabel('False Positive Rate')
 
-    return roc_auc
+    return roc_auc, pr_auc
 
 
 def run_model(classifier, train_set, test_set, n):
@@ -126,6 +138,7 @@ def run_model(classifier, train_set, test_set, n):
     return test_model(test_set, model, n)
 
 
+
 if __name__ == "__main__":
     forest = RandomForestClassifier(n_estimators=10)
     ada = AdaBoostClassifier()
@@ -134,97 +147,38 @@ if __name__ == "__main__":
     tree = DecisionTreeClassifier()
     neural_network = MLPClassifier(alpha=1)
     svc = SVC()
+    classifiers = {'forest': forest, 'ada': ada, 'gbc': gbc, 'k_neighbors': k_neighbors, 'tree': tree, 'neural_network': neural_network, 'svc': svc}
 
-    patients = list(range(0,61))
+    patients = list(range(0,62))
     patients.remove(27)
 
     kf = KFold(n_splits=10)
-    output = open('output.txt','w') 
+    output = open('output2.txt','w') 
 
-    for n in range (3,7):
-        output.write("\\\\\\\\\\\\\\\\\\\\\\\\\\       " + str(n) + "      \\\\\\\\\\\\\\\\\\\\\\\\\\\ \n")
+    for n in range (2,7):
+        output.write("\\\\\\\\\\\\\\\\\\\\\\\\\\       " + str(n) + "      \\\\\\\\\\\\\\\\\\\\\\\\\\ \n")
 
-        # Random Forest Classifier
-        auc_scores = []
-        adjusted_scores = []
+        for name, classifier in classifiers.items():
+            roc_aucs = []
+            pr_aucs = []
+            adjusted_scores = []
 
-        for train_set, test_set in kf.split(patients):
-            score = run_model(forest, train_set, test_set, n)
-            output.write(str(score) + "\n")
-            auc_scores.append(score)
-            if score < 0.5:
-                adjusted_scores.append(1 - score)
-            else:
-                adjusted_scores.append(score)
+            for train_set, test_set in kf.split(patients):
+                roc_auc, pr_auc = run_model(classifier, train_set, test_set, n)
 
-        output.write("Random Forest: \n")
-        output.write("AUROC: " + str(sum(auc_scores) / float(len(auc_scores))) + "\n")
-        output.write("Adj. AUROC: " + str(sum(adjusted_scores) / float(len(auc_scores))) + "\n")
+                output.write("roc_auc" + str(roc_auc) + "\n")
+                output.write("pr_auc" + str(pr_auc) + "\n")
 
-        # AdaBoost Classifier
-        auc_scores = []
-        for train_set, test_set in kf.split(patients):
-            score = run_model(forest, train_set, test_set, n)
-            output.write(str(score)  + "\n")
-            auc_scores.append(score)
+                roc_aucs.append(roc_auc)
+                pr_aucs.append(pr_auc)
 
-        output.write("AdaBoost: \n")
-        output.write("AUROC: " + str(sum(auc_scores) / float(len(auc_scores))) + "\n")
-        output.write("Adj. AUROC: " + str(sum(adjusted_scores) / float(len(auc_scores))) + "\n")
+                if roc_auc < 0.5:
+                    adjusted_scores.append(1 - roc_auc)
+                else:
+                    adjusted_scores.append(roc_auc)
 
-        # Gradient Boosting Classfier
-        auc_scores = []
-        for train_set, test_set in kf.split(patients):
-            score = run_model(forest, train_set, test_set, n)
-            output.write(str(score)  + "\n")
-            auc_scores.append(score)
-
-        output.write("Gradient Boosting: \n")
-        output.write("AUROC: " + str(sum(auc_scores) / float(len(auc_scores))) + "\n")
-        output.write("Adj. AUROC: " + str(sum(adjusted_scores) / float(len(auc_scores))) + "\n")
-
-        # K-Nearest Neighbors Classifier
-        auc_scores = []
-        for train_set, test_set in kf.split(patients):
-            score = run_model(forest, train_set, test_set, n)
-            output.write(str(score) + "\n")
-            auc_scores.append(score)
-
-        output.write("K-Nearest Neighbors: \n")
-        output.write("AUROC: " + str(sum(auc_scores) / float(len(auc_scores))) + "\n")
-        output.write("Adj. AUROC: " + str(sum(adjusted_scores) / float(len(auc_scores))) + "\n")
-
-        # Decision Tree Classifier
-        auc_scores = []
-        for train_set, test_set in kf.split(patients):
-            score = run_model(forest, train_set, test_set, n)
-            output.write(str(score) + "\n")
-            auc_scores.append(score)
-
-        output.write("Decision Tree: \n")
-        output.write("AUROC: " + str(sum(auc_scores) / float(len(auc_scores))) + "\n")
-        output.write("Adj. AUROC: " + str(sum(adjusted_scores) / float(len(auc_scores))) + "\n")
-
-        # Multi-layer Perceptron Classifier (Neural Network)
-        auc_scores = []
-        for train_set, test_set in kf.split(patients):
-            score = run_model(forest, train_set, test_set, n)
-            output.write(str(score) + "\n")
-            auc_scores.append(score)
-
-        output.write("Multi-layer Perceptron: \n")
-        output.write("AUROC: " + str(sum(auc_scores) / float(len(auc_scores))) + "\n")
-        output.write("Adj. AUROC: " + str(sum(adjusted_scores) / float(len(auc_scores))) + "\n")
-
-        # C-Support Vector Classification
-        auc_scores = []
-        for train_set, test_set in kf.split(patients):
-            score = run_model(forest, train_set, test_set, n)
-            output.write(str(score) + "\n")
-            auc_scores.append(score)
-
-        output.write("C-Support Vector: \n")
-        output.write("AUROC: " + str(sum(auc_scores) / float(len(auc_scores))) + "\n")
-        output.write("Adj. AUROC" + str(sum(adjusted_scores) / float(len(auc_scores))) + "\n")
-
+            output.write(name + "\n")
+            output.write("AUROC: " + str(sum(roc_aucs) / float(len(roc_aucs))) + "\n")
+            output.write("AUPRC: " + str(sum(pr_aucs) / float(len(pr_aucs))) + "\n")
+            output.write("Adj. AUROC: " + str(sum(adjusted_scores) / float(len(adjusted_scores))) + "\n")
 
