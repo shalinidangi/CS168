@@ -7,25 +7,45 @@ from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, Gradien
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neural_network import MLPClassifier
-from sklearn.svm import SVC
 from sklearn.metrics import roc_auc_score
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import roc_curve
 from sklearn.metrics import precision_recall_curve
 from sklearn.metrics import auc
 from sklearn.model_selection import KFold
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
-# np.set_printoptions(threshold='nan')
+# np.set_printoptions(threshold=np.nan)
+
+# Load patient data from data.mat
+data = scipy.io.loadmat('../data/data.mat')['data'][0]
 
 def extract_features(image, mask, n):
+    """ 
+    Extracts features and corresponding target values for a single patient
+    (to be used later for model fitting)
+
+    Args:
+        image: T2-weighted image
+        mask: mask image corresponding to T2 image
+        n: feature vector radius
+
+    Returns:
+        patches: array of feature vectors obtained from this patient
+        trimmed_mask: array of target values associated with feature vectors 
+                      (center pixel of each feature vector)
+    """
+
     patches = []
     trimmed_mask = []
 
     for i in range(n, 255-n):
         for j in range(n, 255-n):
-            # if np.count_nonzero(mask[i-n:i+n+1, j-n:j+n+1].astype(int)) > 0:
-            # if 0 not in mask[i-n:i+n+1, j-n:j+n+1].astype(int):
+            # Option 1: If a feature vector contains all 0s, discard it. 
+            #   if np.count_nonzero(mask[i-n:i+n+1, j-n:j+n+1].astype(int)) > 0:
+            # Option 2: If a feature vectore contains at least one 0, discard it.
+            #   if 0 not in mask[i-n:i+n+1, j-n:j+n+1].astype(int):
+            # Option 3: If a feature vector's center pixel is a 0, discard it.
             if int(round(mask[i,j])) != 0:
                 patch = image[i-n:i+n+1, j-n:j+n+1]
                 patches.append(patch.flatten())   
@@ -33,9 +53,21 @@ def extract_features(image, mask, n):
 
     return patches, trimmed_mask
 
-data = scipy.io.loadmat('../data/data.mat')['data'][0]
 
 def create_training_set(train_set, n):
+    """
+    Compiles feature vectors and target values for all patients in training set
+
+    Args:
+        train_set: array of patient indices to be used in training set
+        n: feature vector radius
+
+    Returns:
+        feature_vectors: array of feature vectors for all patients in training set
+        auc_vectors: array of target values for all patients in training set
+        baseline: percentage of 2s (cancerous pixels) in target values
+    """
+
     masks = []
     t2_images = []
 
@@ -43,13 +75,6 @@ def create_training_set(train_set, n):
         # Gather masks and images for all patients (excluding test patient)
         masks.append(data[patient_index][0])
         t2_images.append(data[patient_index][1])
-
-    # i = 0
-    # for mask in masks:
-    #     unique, counts = np.unique(np.around(mask, decimals=1).astype(int), return_counts=True)
-    #     print i
-    #     print dict(zip(unique, counts))
-    #     i += 1
 
     feature_vectors = []
     auc_vectors = []
@@ -63,21 +88,34 @@ def create_training_set(train_set, n):
         # Flatten and reduce masks for use in accuracy and AUC testing
         auc_vectors += trimmed_mask
 
-    # print(len(feature_vectors))
-    # print(len(auc_vectors))
+    baseline = auc_vectors.count(2)/float(len(auc_vectors))
+
     print(auc_vectors.count(2))
     print(auc_vectors.count(1))
     print(auc_vectors.count(0))
     print(auc_vectors.count(2)/float(len(auc_vectors)))
 
-    return feature_vectors, auc_vectors, auc_vectors.count(2)/float(len(auc_vectors))
+    return feature_vectors, auc_vectors, baseline
 
 
 def build_model(feature_vectors, auc_vectors, classifier, filename, train=False):
+    """
+    Fits model based off of specified classifier and provided feature vectors and target values
+
+    Args:
+        feature_vectors: array of feature vectors extracted from patients in training set
+        auc_vectors: array of target values extracted from patients in training set
+        classifier: machine learning classifier chosen for model
+        filename: name of file to save/load model to/from
+        train: (default=False) boolean indicating whether we want to load existing model or fit a new one
+
+    Returns:
+        model: fitted model/loaded model
+    """
+
     if train:
         model = classifier
         model.fit(feature_vectors, auc_vectors)
-        # pickle.dump(model, open(filename, 'wb'))
     else:
         model = pickle.load(open(filename, 'rb'))
 
@@ -85,6 +123,20 @@ def build_model(feature_vectors, auc_vectors, classifier, filename, train=False)
 
 
 def test_model(test_set, model, n):
+    """
+    Evaluates given model on 3 metrics: ROC-AUC, PR-AUC, and accuracy
+
+    Args:
+        test_set: array of patient indices to be used in testing set
+        model: model to be tested
+        n: feature vector radius
+
+    Returns: 
+        roc_auc: ROC-AUC score
+        pr_auc: PR-AUC score
+        accuracy: accuracy
+    """
+
     # Determine features and masks for test patient
     test_features = []
     test_masks = []
@@ -98,18 +150,18 @@ def test_model(test_set, model, n):
 
     false_positive_rate, true_positive_rate, thresholds = roc_curve(test_masks, pred[:, 1], pos_label=2)
     roc_auc = auc(false_positive_rate, true_positive_rate)
-    print(roc_auc)
+    # print(roc_auc)
 
     optimal_idx = np.argmax(true_positive_rate - false_positive_rate)
     optimal_threshold = thresholds[optimal_idx]
-    print(optimal_threshold)
+    # print(optimal_threshold)
 
     precision, recall, thresholds = precision_recall_curve(test_masks, pred[:,1], pos_label=2)
     pr_auc = auc(recall, precision)
-    print(pr_auc)
+    # print(pr_auc)
 
     pred = model.predict(test_features)
-    print(accuracy_score(y_true=test_masks, y_pred=pred))
+    accuracy = accuracy_score(y_true=test_masks, y_pred=pred)
 
     # plt.title('Receiver Operating Characteristic')
     # plt.plot(false_positive_rate, true_positive_rate, 'b',label='AUC = %0.2f'% roc_auc)
@@ -118,17 +170,30 @@ def test_model(test_set, model, n):
     # plt.xlabel('False Positive Rate')
     # plt.show()
 
-    return roc_auc, pr_auc
+    return roc_auc, pr_auc, accuracy
 
 
 def run_model(classifier, train_set, test_set, n):
-    feature_vectors, auc_vectors, baseline = create_training_set(train_set, n)
-    # print(feature_vectors)
-    # print(auc_vectors)
-    model = build_model(feature_vectors, auc_vectors, classifier, "forest.sav", True)
-    roc_auc, pr_auc = test_model(test_set, model, n)
-    return roc_auc, pr_auc, baseline
+    """
+    Creates training set for model fitting, builds model, and tests model
 
+    Args: 
+        classifier: machine learning classifier chosen for model
+        train_set: array of patient indices to be used in training set
+        test_set: array of patient indices to be used in testing set
+        n: feature vector radius
+
+    Returns:
+        roc_auc: ROC-AUC score
+        pr_auc: PR-AUC score
+        accuracy: accuracy
+        baseline: percentage of 2s (cancerous pixels) in target values
+    """
+
+    feature_vectors, auc_vectors, baseline = create_training_set(train_set, n)
+    model = build_model(feature_vectors, auc_vectors, classifier, "forest.sav", True)
+    roc_auc, pr_auc, accuracy = test_model(test_set, model, n)
+    return roc_auc, pr_auc, accuracy, baseline
 
 
 if __name__ == "__main__":
@@ -138,78 +203,61 @@ if __name__ == "__main__":
     k_neighbors = KNeighborsClassifier(3)
     tree = DecisionTreeClassifier(class_weight="balanced")
     neural_network = MLPClassifier(alpha=1)
-    svc = SVC()
     classifiers = [forest, ada, gbc, k_neighbors, tree, neural_network]
     names = ['forest', 'ada', 'gbc', 'k_neighbors', 'tree', 'neural_network']
 
     patients = list(range(0,62))
-    # patients.remove(27)
 
     kf = KFold(n_splits=10)
     output = open('output2.txt','w') 
 
-    # test_set = [18]
-    # train_set = patients
-    # # train_set.remove(18)
-    # print(train_set)
+    # for n in range(3,8):
+    #     output.write("\\\\\\\\\\\\\\\\\\\\\\\\\\       " + str(n) + "      \\\\\\\\\\\\\\\\\\\\\\\\\\ \n")
 
-    # output = open('output3.txt','w') 
-    # for n in range(2,8):
-    #     for i in range(len(classifiers)-1):
+    #     for i in range(len(classifiers)):
+    #         output.write("\n" + names[i] + "\n")
     #         roc_aucs = []
     #         pr_aucs = []
     #         adjusted_scores = []
-    #         roc_auc, pr_auc, baseline = run_model(classifiers[i], train_set, test_set, n)
+    #         baselines = [] 
 
-    #         output.write("roc_auc: " + str(roc_auc) + "\n")
-    #         output.write("pr_auc: " + str(pr_auc) + "\n")
+    #         for train_set, test_set in kf.split(patients):
+    #             roc_auc, pr_auc, baseline = run_model(classifiers[i], train_set, test_set, n)
 
-    #         roc_aucs.append(roc_auc)
-    #         pr_aucs.append(pr_auc)
+    #             output.write("\nroc_auc: " + str(roc_auc) + "\n")
+    #             output.write("pr_auc: " + str(pr_auc) + "\n")
 
-    #         if roc_auc < 0.5:
-    #             adjusted_scores.append(1 - roc_auc)
-    #         else:
-    #             adjusted_scores.append(roc_auc)
+    #             baselines.append(baseline)
+    #             roc_aucs.append(roc_auc)
+    #             pr_aucs.append(pr_auc)
 
-    #         output.write(names[i] + "\n")
-    #         output.write("AUROC: " + str(sum(roc_aucs) / float(len(roc_aucs))) + "\n")
-    #         output.write("Adj. AUROC: " + str(sum(adjusted_scores) / float(len(adjusted_scores))) + "\n")
+    #         diff = map(operator.sub, pr_aucs, baselines)
+    #         output.write("\nAUROC: " + str(sum(roc_aucs) / float(len(roc_aucs))) + "\n")
     #         output.write("AUPRC: " + str(sum(pr_aucs) / float(len(pr_aucs))) + "\n")
-    #         output.write("Ratio of Positive/Total: " + str(baseline) + "\n")
-    #         output.write("Difference in Average Precision: " + str(sum(pr_aucs) / float(len(pr_aucs)) - baseline) + "\n")
+    #         output.write("Ratio of Positive/Total: " + str(sum(baselines) / float(len(baselines))) + "\n")
+    #         output.write("Difference in Average Precision: " + str(sum(diff) / float(len(diff))) + "\n")
 
-    for n in range (3,8):
-        output.write("\\\\\\\\\\\\\\\\\\\\\\\\\\       " + str(n) + "      \\\\\\\\\\\\\\\\\\\\\\\\\\ \n")
 
+    test_set = [18]
+    train_set = patients
+    train_set.remove(18)
+
+    # Optional testing for single patient
+    output = open('patient18.txt','w') 
+    for n in range(2,8):
+        print("N = " + str(n))
         for i in range(len(classifiers)):
-            output.write("\n" + names[i] + "\n")
-            roc_aucs = []
-            pr_aucs = []
-            adjusted_scores = []
-            baselines = [] 
-            # print(patients)
+            roc_auc, pr_auc, accuracy, baseline = run_model(classifiers[i], train_set, test_set, n)
 
-            for train_set, test_set in kf.split(patients):
-                # print (train_set)
-                roc_auc, pr_auc, baseline = run_model(classifiers[i], train_set, test_set, n)
+            print(names[i])
+            print("AUROC: " + str(roc_auc))
+            print("AUPRC: " + str(pr_auc))
+            print("Accuracy: " + str(accuracy))
 
-                output.write("\nroc_auc: " + str(roc_auc) + "\n")
-                output.write("pr_auc: " + str(pr_auc) + "\n")
+            output.write(names[i] + "\n")
+            output.write("AUROC: " + str(roc_auc) + "\n")
+            output.write("Baseline: " + str(baseline) + "\n")
+            output.write("AUPRC: " + str(pr_auc) + "\n")
+            output.write("Accuracy: " + str(accuracy) + "\n")
 
-                baselines.append(baseline)
-                roc_aucs.append(roc_auc)
-                pr_aucs.append(pr_auc)
-
-                if roc_auc < 0.5:
-                    adjusted_scores.append(1 - roc_auc)
-                else:
-                    adjusted_scores.append(roc_auc)
-
-            diff = map(operator.sub, pr_aucs, baselines)
-            output.write("\nAUROC: " + str(sum(roc_aucs) / float(len(roc_aucs))) + "\n")
-            output.write("Adj. AUROC: " + str(sum(adjusted_scores) / float(len(adjusted_scores))) + "\n")
-            output.write("AUPRC: " + str(sum(pr_aucs) / float(len(pr_aucs))) + "\n")
-            output.write("Ratio of Positive/Total: " + str(sum(baselines) / float(len(baselines))) + "\n")
-            output.write("Difference in Average Precision: " + str(sum(diff) / float(len(diff))) + "\n")
 
