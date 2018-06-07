@@ -90,11 +90,6 @@ def create_training_set(train_set, n):
 
     baseline = auc_vectors.count(2)/float(len(auc_vectors))
 
-    print(auc_vectors.count(2))
-    print(auc_vectors.count(1))
-    print(auc_vectors.count(0))
-    print(auc_vectors.count(2)/float(len(auc_vectors)))
-
     return feature_vectors, auc_vectors, baseline
 
 
@@ -150,15 +145,12 @@ def test_model(test_set, model, n):
 
     false_positive_rate, true_positive_rate, thresholds = roc_curve(test_masks, pred[:, 1], pos_label=2)
     roc_auc = auc(false_positive_rate, true_positive_rate)
-    # print(roc_auc)
 
     optimal_idx = np.argmax(true_positive_rate - false_positive_rate)
     optimal_threshold = thresholds[optimal_idx]
-    # print(optimal_threshold)
 
     precision, recall, thresholds = precision_recall_curve(test_masks, pred[:,1], pos_label=2)
     pr_auc = auc(recall, precision)
-    # print(pr_auc)
 
     pred = model.predict(test_features)
     accuracy = accuracy_score(y_true=test_masks, y_pred=pred)
@@ -193,6 +185,7 @@ def run_model(classifier, train_set, test_set, n):
     feature_vectors, auc_vectors, baseline = create_training_set(train_set, n)
     model = build_model(feature_vectors, auc_vectors, classifier, "forest.sav", True)
     roc_auc, pr_auc, accuracy = test_model(test_set, model, n)
+   
     return roc_auc, pr_auc, accuracy, baseline
 
 
@@ -204,60 +197,74 @@ if __name__ == "__main__":
     tree = DecisionTreeClassifier(class_weight="balanced")
     neural_network = MLPClassifier(alpha=1)
     classifiers = [forest, ada, gbc, k_neighbors, tree, neural_network]
-    names = ['forest', 'ada', 'gbc', 'k_neighbors', 'tree', 'neural_network']
+    names = ["Random Forest", "AdaBoost", "Gradient Boosting", "K-Nearest Neighbors", "Decision Tree", "Multilayer Perceptron (Neural Network)"]
 
     patients = list(range(0,62))
 
     kf = KFold(n_splits=10)
-    output = open('output2.txt','w') 
+    output = open('results.txt','w') 
 
-    # for n in range(3,8):
-    #     output.write("\\\\\\\\\\\\\\\\\\\\\\\\\\       " + str(n) + "      \\\\\\\\\\\\\\\\\\\\\\\\\\ \n")
-
-    #     for i in range(len(classifiers)):
-    #         output.write("\n" + names[i] + "\n")
-    #         roc_aucs = []
-    #         pr_aucs = []
-    #         adjusted_scores = []
-    #         baselines = [] 
-
-    #         for train_set, test_set in kf.split(patients):
-    #             roc_auc, pr_auc, baseline = run_model(classifiers[i], train_set, test_set, n)
-
-    #             output.write("\nroc_auc: " + str(roc_auc) + "\n")
-    #             output.write("pr_auc: " + str(pr_auc) + "\n")
-
-    #             baselines.append(baseline)
-    #             roc_aucs.append(roc_auc)
-    #             pr_aucs.append(pr_auc)
-
-    #         diff = map(operator.sub, pr_aucs, baselines)
-    #         output.write("\nAUROC: " + str(sum(roc_aucs) / float(len(roc_aucs))) + "\n")
-    #         output.write("AUPRC: " + str(sum(pr_aucs) / float(len(pr_aucs))) + "\n")
-    #         output.write("Ratio of Positive/Total: " + str(sum(baselines) / float(len(baselines))) + "\n")
-    #         output.write("Difference in Average Precision: " + str(sum(diff) / float(len(diff))) + "\n")
-
-
-    test_set = [18]
-    train_set = patients
-    train_set.remove(18)
-
-    # Optional testing for single patient
-    output = open('patient18.txt','w') 
-    for n in range(2,8):
+    for n in range(3,8):
+        output.write("\\\\\\\\\\\\\\\\\\\\\\\\\\       " + str(n) + "      \\\\\\\\\\\\\\\\\\\\\\\\\\ \n")
         print("N = " + str(n))
         for i in range(len(classifiers)):
-            roc_auc, pr_auc, accuracy, baseline = run_model(classifiers[i], train_set, test_set, n)
-
+            output.write("\n" + names[i] + "\n")
             print(names[i])
-            print("AUROC: " + str(roc_auc))
-            print("AUPRC: " + str(pr_auc))
-            print("Accuracy: " + str(accuracy))
+            roc_aucs = []
+            baselines = []
+            pr_aucs = []
+            accuracies = []
+
+            for train_set, test_set in kf.split(patients):
+                roc_auc, pr_auc, accuracy, baseline = run_model(classifiers[i], train_set, test_set, n)
+
+                output.write("roc_auc: " + str(roc_auc) + "\n")
+                output.write("pr_auc: " + str(pr_auc) + "\n")
+                output.write("accuracy: " + str(pr_auc) + "\n")
+
+                print("roc_auc: " + str(roc_auc))
+                print("pr_auc: " + str(pr_auc))
+                print("accuracy: " + str(accuracy))
+
+                roc_aucs.append(roc_auc)
+                baselines.append(baseline)
+                pr_aucs.append(pr_auc)
+                accuracies.append(accuracy)
+
+
+            print("AUROC: " + str(sum(roc_aucs) / float(len(roc_aucs))))
+            print("Baseline: " + str(sum(baselines) / float(len(baselines))))
+            print("AUPRC: " + str(sum(pr_aucs) / float(len(pr_aucs))))
+            print("Accuracy: " + str(sum(accuracies) / float(len(accuracies))))
 
             output.write(names[i] + "\n")
-            output.write("AUROC: " + str(roc_auc) + "\n")
-            output.write("Baseline: " + str(baseline) + "\n")
-            output.write("AUPRC: " + str(pr_auc) + "\n")
-            output.write("Accuracy: " + str(accuracy) + "\n")
+            output.write("AUROC: " + str(sum(roc_aucs) / float(len(roc_aucs))) + "\n")
+            output.write("Baseline: " + str(sum(baselines) / float(len(baselines))) + "\n")
+            output.write("AUPRC: " + str(sum(pr_aucs) / float(len(pr_aucs))) + "\n")
+            output.write("Accuracy: " + str(sum(accuracies) / float(len(accuracies))) + "\n")
+
+
+    # test_set = [18]
+    # train_set = patients
+    # train_set.remove(18)
+
+    # # Optional testing for single patient
+    # output = open('patient18.txt','w') 
+    # for n in range(2,8):
+    #     print("N = " + str(n))
+    #     output.write("N = " + str(n) + "\n")
+    #     for i in range(len(classifiers)):
+    #         print(names[i])
+    #         output.write(names[i] + "\n")
+    #         roc_auc, pr_auc, accuracy, baseline = run_model(classifiers[i], train_set, test_set, n)
+
+    #         print("AUROC: " + str(roc_auc))
+    #         print("AUPRC: " + str(pr_auc))
+    #         print("Accuracy: " + str(accuracy))
+
+    #         output.write("AUROC: " + str(roc_auc) + "\n")
+    #         output.write("Baseline: " + str(baseline) + "\n")
+    #         output.write("AUPRC: " + str(pr_auc) + "\n")
+    #         output.write("Accuracy: " + str(accuracy) + "\n")
 
 
