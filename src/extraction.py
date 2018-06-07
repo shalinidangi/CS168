@@ -243,12 +243,12 @@ if __name__ == "__main__":
             output.write("AUPRC: " + str(sum(pr_aucs) / float(len(pr_aucs))) + "\n")
             output.write("Accuracy: " + str(sum(accuracies) / float(len(accuracies))) + "\n")
 
-
+    
+    # Optional testing for single patient
     # test_set = [18]
     # train_set = patients
     # train_set.remove(18)
 
-    # # Optional testing for single patient
     # output = open('patient18.txt','w') 
     # for n in range(2,8):
     #     print("N = " + str(n))
